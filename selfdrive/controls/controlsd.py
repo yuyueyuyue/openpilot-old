@@ -5,9 +5,10 @@ from typing import SupportsFloat
 
 from cereal import car, log
 from common.numpy_fast import clip
-from common.realtime import sec_since_boot, config_realtime_process, Priority, Ratekeeper, DT_CTRL
+from common.realtime import sec_since_boot, config_realtime_process, Priority, Ratekeeper, DT_CTRL, DT_MDL
 from common.profiler import Profiler
 from common.params import Params, put_nonblocking
+from common.filter_simple import FirstOrderFilter
 import cereal.messaging as messaging
 from common.conversions import Conversions as CV
 from panda import ALTERNATIVE_EXPERIENCE
@@ -83,14 +84,14 @@ class Controls:
     self.params = Params()
     self.sm = sm
     if self.sm is None:
-      ignore = ['testJoystick']
+      ignore = ['testJoystick', 'navInstruction']
       if SIMULATION:
         ignore += ['driverCameraState', 'managerState']
       if self.params.get_bool('WideCameraOnly'):
         ignore += ['roadCameraState']
       self.sm = messaging.SubMaster(['deviceState', 'pandaStates', 'peripheralState', 'modelV2', 'liveCalibration',
                                      'driverMonitoringState', 'longitudinalPlan', 'lateralPlan', 'liveLocationKalman',
-                                     'managerState', 'liveParameters', 'radarState', 'liveTorqueParameters', 'testJoystick'] + self.camera_packets,
+                                     'managerState', 'liveParameters', 'radarState', 'liveTorqueParameters', 'testJoystick', 'navInstruction'] + self.camera_packets,
                                     ignore_alive=ignore, ignore_avg_freq=['radarState', 'longitudinalPlan', 'testJoystick'])
 
     if CI is None:
@@ -185,6 +186,11 @@ class Controls:
     self.desired_curvature = 0.0
     self.desired_curvature_rate = 0.0
     self.v_cruise_helper = VCruiseHelper(self.CP)
+
+    self.rr_filter = FirstOrderFilter(0., 2., DT_MDL)
+    self.ll_filter = FirstOrderFilter(0., 2., DT_MDL)
+    self.last_on_ramp_right = False
+    self.last_on_ramp_right_timer = 0.0
 
     # TODO: no longer necessary, aside from process replay
     self.sm['liveParameters'].valid = True
@@ -429,6 +435,27 @@ class Controls:
 
     self.sm.update(0)
 
+    if self.sm['navInstruction'].maneuverType in ('on ramp', 'turn') and self.sm['navInstruction'].maneuverModifier == 'right':
+      self.last_on_ramp_right = True
+
+    CS = CS.as_builder()
+    if self.sm.updated['modelV2']:
+      self.ll_filter.update(self.sm['modelV2'].laneLineProbs[0])
+      self.rr_filter.update(self.sm['modelV2'].laneLineProbs[3])
+    self.last_on_ramp_right_timer += DT_CTRL if self.last_on_ramp_right else 0.0
+    if (self.last_on_ramp_right and self.sm['lateralPlan'].laneChangeState == LaneChangeState.laneChangeFinishing) or \
+       self.last_on_ramp_right_timer > 60:
+      self.last_on_ramp_right = False
+      self.last_on_ramp_right_timer = 0.0
+
+    if CS.vEgo > 18.:
+      if self.ll_filter.x > 0.5 and self.last_on_ramp_right:
+        CS.leftBlinker = True
+      elif self.rr_filter.x > 0.5 and self.sm['navInstruction'].maneuverType == 'off ramp' and \
+         self.sm['navInstruction'].maneuverModifier == 'right' and self.sm['navInstruction'].maneuverDistance < (1.5 * 1609.34):
+        CS.rightBlinker = True
+    CS = CS.as_reader()
+
     if not self.initialized:
       all_valid = CS.canValid and self.sm.all_checks()
       timed_out = self.sm.frame * DT_CTRL > (6. if REPLAY else 3.5)
@@ -576,6 +603,9 @@ class Controls:
 
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
+
+    actuators.gas = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.left else 0.
+    actuators.brake = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.right else 0.
 
     if CS.leftBlinker or CS.rightBlinker:
       self.last_blinker_frame = self.sm.frame
