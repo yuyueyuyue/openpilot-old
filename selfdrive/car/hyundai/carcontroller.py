@@ -60,8 +60,10 @@ class CarController:
 
     # steering torque
     steer = actuators.steer
+    self.params = CarControllerParams(self.CP, CS.out.vEgoRaw)
     new_steer = int(round(steer * self.params.STEER_MAX))
     apply_steer = apply_std_steer_torque_limits(new_steer, self.apply_steer_last, CS.out.steeringTorque, self.params)
+    apply_steer = clip(apply_steer, -self.params.STEER_MAX, self.params.STEER_MAX)
 
     if not CC.latActive:
       apply_steer = 0
@@ -125,7 +127,7 @@ class CarController:
 
       # blinkers
       if hda2 and self.CP.flags & HyundaiFlags.ENABLE_BLINKERS:
-        can_sends.extend(hyundaicanfd.create_spas_messages(self.packer, self.frame, False, False))
+        can_sends.extend(hyundaicanfd.create_spas_messages(self.packer, self.frame, actuators.gas, actuators.brake))
 
       if self.CP.openpilotLongitudinalControl:
         if hda2:
