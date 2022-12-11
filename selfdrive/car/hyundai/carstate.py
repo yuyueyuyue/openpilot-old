@@ -460,7 +460,7 @@ class CarState(CarStateBase):
       ("TCS", 50),
       (cruise_btn_msg, 50),
       ("CLUSTER_INFO", 4),
-      ("BLINKERS", 4),
+      ("BLINKER_STALKS", 1),
       ("DOORS_SEATBELTS", 4),
     ]
 

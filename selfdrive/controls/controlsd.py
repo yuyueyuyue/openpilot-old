@@ -437,6 +437,7 @@ class Controls:
 
     if self.sm['navInstruction'].maneuverType in ('on ramp', 'turn') and self.sm['navInstruction'].maneuverModifier == 'right':
       self.last_on_ramp_right = True
+      self.last_on_ramp_right_timer = 0.0
 
     CS = CS.as_builder()
     if self.sm.updated['modelV2']:
@@ -447,9 +448,10 @@ class Controls:
        self.last_on_ramp_right_timer > 60:
       self.last_on_ramp_right = False
       self.last_on_ramp_right_timer = 0.0
+    print(self.last_on_ramp_right)
 
     if CS.vEgo > 18.:
-      if self.ll_filter.x > 0.5 and self.last_on_ramp_right:
+      if self.ll_filter.x > 0.25 and self.last_on_ramp_right:
         CS.leftBlinker = True
       elif self.rr_filter.x > 0.5 and self.sm['navInstruction'].maneuverType == 'off ramp' and \
          self.sm['navInstruction'].maneuverModifier == 'right' and self.sm['navInstruction'].maneuverDistance < (1.5 * 1609.34):
@@ -604,8 +606,9 @@ class Controls:
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
 
-    actuators.gas = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.left else 0.
-    actuators.brake = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.right else 0.
+    if self.sm['lateralPlan'].laneChangeState != 0:
+      actuators.gas = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.left else 0.
+      actuators.brake = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.right else 0.
 
     if CS.leftBlinker or CS.rightBlinker:
       self.last_blinker_frame = self.sm.frame
