@@ -253,7 +253,7 @@ class Controls:
            self.sm['navInstruction'].maneuverModifier == 'right' and self.sm['navInstruction'].maneuverDistance < (1.5 * 1609.34):
         desired_dir = LaneChangeDirection.right
 
-    if (desired_dir != LaneChangeDirection.none) and ((self.last_lane_change_dir == desired_dir) or (self.sm.frame - self.last_lane_change_frame)*DT_CTRL > 7.0):
+    if (desired_dir != LaneChangeDirection.none) and ((self.last_lane_change_dir == desired_dir) or (self.sm.frame - self.last_lane_change_frame)*DT_CTRL > 10.0):
       if desired_dir == LaneChangeDirection.right:
         CS.rightBlinker = True
         print(self.sm.frame, "right")
@@ -624,10 +624,9 @@ class Controls:
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
 
-    lp = self.sm['lateralPlan']
-    if lp.laneChangeState != LaneChangeState.off:
-      actuators.gas = float(lp.laneChangeDirection == LaneChangeDirection.left)
-      actuators.brake = float(lp.laneChangeDirection == LaneChangeDirection.right)
+    if self.sm['lateralPlan'].laneChangeState != LaneChangeState.off:
+      actuators.gas = float(self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.left)
+      actuators.brake = float(self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.right)
 
     if CS.leftBlinker or CS.rightBlinker:
       self.last_blinker_frame = self.sm.frame
