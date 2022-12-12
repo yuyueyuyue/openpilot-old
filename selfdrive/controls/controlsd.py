@@ -241,10 +241,6 @@ class Controls:
       self.last_on_ramp_right = False
       self.last_on_ramp_right_timer = 0.0
 
-    if (self.sm.frame % 50) == 0:
-      print(self.last_on_ramp_right_timer, round(self.ll_filter.x, 3), round(self.rr_filter.x, 3))
-
-    CS = CS.as_builder()
     desired_dir = LaneChangeDirection.none
     if CS.vEgo > 18.:
       if self.ll_filter.x > 0.3 and self.last_on_ramp_right and self.last_on_ramp_right_timer > 2.0:
@@ -253,13 +249,10 @@ class Controls:
            self.sm['navInstruction'].maneuverModifier == 'right' and self.sm['navInstruction'].maneuverDistance < (1.5 * 1609.34):
         desired_dir = LaneChangeDirection.right
 
-    if (desired_dir != LaneChangeDirection.none) and ((self.last_lane_change_dir == desired_dir) or (self.sm.frame - self.last_lane_change_frame)*DT_CTRL > 10.0):
-      if desired_dir == LaneChangeDirection.right:
-        CS.rightBlinker = True
-        print(self.sm.frame, "right")
-      else:
-        CS.leftBlinker = True
-        print(self.sm.frame, "left")
+    CS = CS.as_builder()
+    if (desired_dir != LaneChangeDirection.none) and ((self.last_lane_change_dir == desired_dir) or (self.sm.frame - self.last_lane_change_frame)*DT_CTRL > 15.0):
+      CS.rightBlinker = CS.leftBlinker or (desired_dir == LaneChangeDirection.left)
+      CS.rightBlinker = CS.rightBlinker or (desired_dir == LaneChangeDirection.right)
       self.last_lane_change_dir = desired_dir
       self.last_lane_change_frame = self.sm.frame
 
