@@ -127,7 +127,7 @@ class CarController:
 
       # blinkers
       if hda2 and self.CP.flags & HyundaiFlags.ENABLE_BLINKERS:
-        can_sends.extend(hyundaicanfd.create_spas_messages(self.packer, self.frame, actuators.gas, actuators.brake))
+        can_sends.extend(hyundaicanfd.create_spas_messages(self.packer, self.frame, CC.leftBlinker, CC.rightBlinker))
 
       if self.CP.openpilotLongitudinalControl:
         if hda2:
