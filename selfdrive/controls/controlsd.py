@@ -5,7 +5,7 @@ from typing import SupportsFloat
 
 from cereal import car, log
 from common.numpy_fast import clip
-from common.realtime import sec_since_boot, config_realtime_process, Priority, Ratekeeper, DT_CTRL, DT_MDL
+from common.realtime import sec_since_boot, config_realtime_process, Priority, Ratekeeper, DT_CTRL
 from common.profiler import Profiler
 from common.params import Params, put_nonblocking
 from common.filter_simple import FirstOrderFilter
@@ -187,8 +187,7 @@ class Controls:
     self.desired_curvature_rate = 0.0
     self.v_cruise_helper = VCruiseHelper(self.CP)
 
-    self.rr_filter = FirstOrderFilter(0., 2., DT_MDL)
-    self.ll_filter = FirstOrderFilter(0., 2., DT_MDL)
+    self.laneline_filters = [FirstOrderFilter(0., 2., 0.05) for _ in range(4)]
     self.last_on_ramp_right = False
     self.last_on_ramp_right_timer = 0.0
     self.last_lane_change_dir = LaneChangeDirection.none
@@ -229,8 +228,8 @@ class Controls:
 
   def handle_nav_lane_changes(self, CS):
     if self.sm.updated['modelV2']:
-      self.ll_filter.update(self.sm['modelV2'].laneLineProbs[0])
-      self.rr_filter.update(self.sm['modelV2'].laneLineProbs[3])
+      for i in range(4):
+        self.laneline_filters[i].update(self.sm['modelV2'].laneLineProbs[i])
     if self.sm['navInstruction'].maneuverType in ('on ramp', 'turn') and self.sm['navInstruction'].maneuverModifier == 'right':
       self.last_on_ramp_right = True
       self.last_on_ramp_right_timer = 0.0
@@ -243,19 +242,18 @@ class Controls:
 
     desired_dir = LaneChangeDirection.none
     if CS.vEgo > 18.:
-      if self.ll_filter.x > 0.3 and self.last_on_ramp_right and self.last_on_ramp_right_timer > 2.0:
+      if self.laneline_filters[0].x > 0.3 and self.last_on_ramp_right and self.last_on_ramp_right_timer > 2.0:
         desired_dir = LaneChangeDirection.left
-      elif self.rr_filter.x > 0.5 and self.sm['navInstruction'].maneuverType == 'off ramp' and \
+      elif self.laneline_filters[3].x > 0.5 and self.sm['navInstruction'].maneuverType == 'off ramp' and \
            self.sm['navInstruction'].maneuverModifier == 'right' and self.sm['navInstruction'].maneuverDistance < (1.5 * 1609.34):
         desired_dir = LaneChangeDirection.right
 
     CS = CS.as_builder()
     if (desired_dir != LaneChangeDirection.none) and ((self.last_lane_change_dir == desired_dir) or (self.sm.frame - self.last_lane_change_frame)*DT_CTRL > 15.0):
-      CS.rightBlinker = CS.leftBlinker or (desired_dir == LaneChangeDirection.left)
+      CS.leftBlinker = CS.leftBlinker or (desired_dir == LaneChangeDirection.left)
       CS.rightBlinker = CS.rightBlinker or (desired_dir == LaneChangeDirection.right)
       self.last_lane_change_dir = desired_dir
       self.last_lane_change_frame = self.sm.frame
-
     return CS.as_reader()
 
   def update_events(self, CS):
