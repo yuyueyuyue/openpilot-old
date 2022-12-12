@@ -100,7 +100,7 @@ class RouteEngine:
       self.clear_route()
       return
 
-    should_recompute = self.should_recompute()
+    should_recompute = False # self.should_recompute()
     if new_destination != self.nav_destination:
       cloudlog.warning(f"Got new destination from NavDestination param {new_destination}")
       should_recompute = True
