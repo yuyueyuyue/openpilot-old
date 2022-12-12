@@ -191,6 +191,8 @@ class Controls:
     self.ll_filter = FirstOrderFilter(0., 2., DT_MDL)
     self.last_on_ramp_right = False
     self.last_on_ramp_right_timer = 0.0
+    self.last_lane_change_dir = LaneChangeDirection.none
+    self.last_lane_change_frame = 0.
 
     # TODO: no longer necessary, aside from process replay
     self.sm['liveParameters'].valid = True
@@ -224,6 +226,44 @@ class Controls:
 
       if any(ps.controlsAllowed for ps in self.sm['pandaStates']):
         self.state = State.enabled
+
+  def handle_nav_lane_changes(self, CS):
+    if self.sm.updated['modelV2']:
+      self.ll_filter.update(self.sm['modelV2'].laneLineProbs[0])
+      self.rr_filter.update(self.sm['modelV2'].laneLineProbs[3])
+    if self.sm['navInstruction'].maneuverType in ('on ramp', 'turn') and self.sm['navInstruction'].maneuverModifier == 'right':
+      self.last_on_ramp_right = True
+      self.last_on_ramp_right_timer = 0.0
+
+    self.last_on_ramp_right_timer += DT_CTRL if self.last_on_ramp_right else 0.0
+    if (self.last_on_ramp_right and self.sm['lateralPlan'].laneChangeState == LaneChangeState.laneChangeFinishing) or \
+       self.last_on_ramp_right_timer > 60:
+      self.last_on_ramp_right = False
+      self.last_on_ramp_right_timer = 0.0
+
+    if (self.sm.frame % 50) == 0:
+      print(self.last_on_ramp_right_timer, round(self.ll_filter.x, 3), round(self.rr_filter.x, 3))
+
+    CS = CS.as_builder()
+    desired_dir = LaneChangeDirection.none
+    if CS.vEgo > 18.:
+      if self.ll_filter.x > 0.3 and self.last_on_ramp_right and self.last_on_ramp_right_timer > 2.0:
+        desired_dir = LaneChangeDirection.left
+      elif self.rr_filter.x > 0.5 and self.sm['navInstruction'].maneuverType == 'off ramp' and \
+           self.sm['navInstruction'].maneuverModifier == 'right' and self.sm['navInstruction'].maneuverDistance < (1.5 * 1609.34):
+        desired_dir = LaneChangeDirection.right
+
+    if (desired_dir != LaneChangeDirection.none) and ((self.last_lane_change_dir == desired_dir) or (self.sm.frame - self.last_lane_change_frame)*DT_CTRL > 7.0):
+      if desired_dir == LaneChangeDirection.right:
+        CS.rightBlinker = True
+        print(self.sm.frame, "right")
+      else:
+        CS.leftBlinker = True
+        print(self.sm.frame, "left")
+      self.last_lane_change_dir = desired_dir
+      self.last_lane_change_frame = self.sm.frame
+
+    return CS.as_reader()
 
   def update_events(self, CS):
     """Compute carEvents from carState"""
@@ -434,29 +474,7 @@ class Controls:
     CS = self.CI.update(self.CC, can_strs)
 
     self.sm.update(0)
-
-    if self.sm['navInstruction'].maneuverType in ('on ramp', 'turn') and self.sm['navInstruction'].maneuverModifier == 'right':
-      self.last_on_ramp_right = True
-      self.last_on_ramp_right_timer = 0.0
-
-    CS = CS.as_builder()
-    if self.sm.updated['modelV2']:
-      self.ll_filter.update(self.sm['modelV2'].laneLineProbs[0])
-      self.rr_filter.update(self.sm['modelV2'].laneLineProbs[3])
-    self.last_on_ramp_right_timer += DT_CTRL if self.last_on_ramp_right else 0.0
-    if (self.last_on_ramp_right and self.sm['lateralPlan'].laneChangeState == LaneChangeState.laneChangeFinishing) or \
-       self.last_on_ramp_right_timer > 60:
-      self.last_on_ramp_right = False
-      self.last_on_ramp_right_timer = 0.0
-    print(self.last_on_ramp_right)
-
-    if CS.vEgo > 18.:
-      if self.ll_filter.x > 0.25 and self.last_on_ramp_right:
-        CS.leftBlinker = True
-      elif self.rr_filter.x > 0.5 and self.sm['navInstruction'].maneuverType == 'off ramp' and \
-         self.sm['navInstruction'].maneuverModifier == 'right' and self.sm['navInstruction'].maneuverDistance < (1.5 * 1609.34):
-        CS.rightBlinker = True
-    CS = CS.as_reader()
+    CS = self.handle_nav_lane_changes(CS)
 
     if not self.initialized:
       all_valid = CS.canValid and self.sm.all_checks()
@@ -606,9 +624,10 @@ class Controls:
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
 
-    if self.sm['lateralPlan'].laneChangeState != 0:
-      actuators.gas = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.left else 0.
-      actuators.brake = 1. if self.sm['lateralPlan'].laneChangeDirection == LaneChangeDirection.right else 0.
+    lp = self.sm['lateralPlan']
+    if lp.laneChangeState != LaneChangeState.off:
+      actuators.gas = float(lp.laneChangeDirection == LaneChangeDirection.left)
+      actuators.brake = float(lp.laneChangeDirection == LaneChangeDirection.right)
 
     if CS.leftBlinker or CS.rightBlinker:
       self.last_blinker_frame = self.sm.frame
