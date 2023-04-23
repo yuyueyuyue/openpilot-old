@@ -105,6 +105,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 2011 + STD_CARGO_KG
       ret.wheelbase = 2.98
       ret.vEgoStopping = 0.2
+      ret.vEgoStarting = 0.2
 
     elif candidate == CAR.CRAFTER_MK2:
       ret.mass = 2100 + STD_CARGO_KG
