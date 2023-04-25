@@ -105,8 +105,11 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 2011 + STD_CARGO_KG
       ret.wheelbase = 2.98
       ret.vEgoStarting = 0.25
-      ret.vEgoStopping = 0.25
-      ret.stoppingDecelRate = 0.6
+      ret.vEgoStopping = 0.35
+      ret.stoppingDecelRate = 0.7
+      ret.longitudinalActuatorDelayLowerBound = 0.5
+      ret.longitudinalActuatorDelayUpperBound = 0.5
+      ret.longitudinalTuning.kpV = [0.2]
 
     elif candidate == CAR.CRAFTER_MK2:
       ret.mass = 2100 + STD_CARGO_KG
