@@ -107,6 +107,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.25
       ret.vEgoStopping = 0.25
       ret.stoppingDecelRate = 0.35
+      ret.longitudinalActuatorDelayLowerBound = 0.5
       ret.longitudinalActuatorDelayUpperBound = 0.5
 
     elif candidate == CAR.CRAFTER_MK2:
