@@ -88,10 +88,8 @@ class CarInterface(CarInterfaceBase):
 
     ret.pcmCruise = not ret.openpilotLongitudinalControl
     ret.stoppingControl = True
-    ret.startingState = True
-    ret.startAccel = 1.0
-    ret.vEgoStarting = 1.0
-    ret.vEgoStopping = 1.0
+    ret.vEgoStarting = 0.1
+    ret.vEgoStopping = 0.3
     ret.longitudinalTuning.kpV = [0.1]
     ret.longitudinalTuning.kiV = [0.0]
 
@@ -104,8 +102,6 @@ class CarInterface(CarInterfaceBase):
     elif candidate == CAR.ATLAS_MK1:
       ret.mass = 2011 + STD_CARGO_KG
       ret.wheelbase = 2.98
-      ret.vEgoStopping = 0.35
-      ret.longitudinalActuatorDelayUpperBound = 0.5
 
     elif candidate == CAR.CRAFTER_MK2:
       ret.mass = 2100 + STD_CARGO_KG
